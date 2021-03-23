@@ -123,4 +123,4 @@ spinIndex = 0
 Mx=mx.mean(axis=0)
 My=my.mean(axis=0)
 Mz=mz.mean(axis=0)
-plotMagnetization(mx[spinIndex],my[spinIndex],mz[spinIndex])
+plotMagnetization(Mx,My,Mz)
