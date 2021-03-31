@@ -19,13 +19,13 @@ Nx=1
 Ny=1
 Nz=1
 J1=1
-Bi=np.array([-1,0,0])
-dt=0.0001
+Bi=np.array([-1,0,0])  #Tesla
+dt=0.0001  #fs
 step=10000
 pos_file='Dimer'
 r,latt_s=find_neighbor.expand_cell(pos_file,Nx,Ny,Nz)
-Magmom_length=1
-damping_onsite=0.01
+Magmom_length=1   #uB
+damping_onsite=0.01  
 # damping_offsite=0.05
 NN,NL1=find_neighbor.find_neighbor_npbc(pos_file,Nx,Ny,Nz)
 # find_neighbor.plot_atom(r)
