@@ -15,6 +15,10 @@ Module global
     DATA A21 /9*0.d0/
     DATA A11 /1.d0,0.d0,0.d0,0.d0,1.d0,0.d0,0.d0,0.d0,1.d0/
     DATA A22 /1.d0,0.d0,0.d0,0.d0,1.d0,0.d0,0.d0,0.d0,1.d0/
+    ! DATA A12 /9*1.d0/
+    ! DATA A21 /9*1.d0/
+    ! DATA A11 /1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0/
+    ! DATA A22 /1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0,1.d0/
 end Module
 
 module spin_dynamics
@@ -30,33 +34,38 @@ module spin_dynamics
     !     energy = -J1*DOT_PRODUCT(spin(1,:),spin(2,:)) - J1*DOT_PRODUCT(spin(2,:),spin(1,:))
     ! end function
 
-    function find_Beff(spin) result(B_eff )
+    function find_Beff(s_new,s_old) result(B_eff)
         implicit none
         real(DP),dimension(row,col) :: B_eff,B_eff1,B_eff2,B_eff3
-        Real(DP),dimension(row,col),INTENT(IN) :: spin
+        Real(DP),dimension(row,col),INTENT(IN) :: s_new,s_old
         INTEGER :: ii,jj,kk
          damping(:,:,1,1)=A11*damping_onsite  
          damping(:,:,1,2)=A12*damping_onsite 
          damping(:,:,2,1)=A21*damping_onsite 
          damping(:,:,2,2)=A22*damping_onsite  
-
+        !initialize,print,
+         DATA B_eff1 /6*0.d0/
+         DATA B_eff2 /6*0.d0/
+         DATA B_eff3 /6*0.d0/
         do kk=1,row
             if (kk==1) then
-                B_eff1(kk,:)= J1*spin(2,:) + J1*spin(2,:)
+                B_eff1(kk,:)= J1*s_new(2,:) + J1*s_new(2,:)
             else
-                B_eff1(kk,:)= J1*spin(1,:) + J1*spin(1,:)
+                B_eff1(kk,:)= J1*s_new(1,:) + J1*s_new(1,:)
             end if
         end do
-        B_eff2=(B_eff1+spread(Bi,1,row)) !hamitonian+Bi
-        ! do ii=1,row
-        !     do jj=1,row
-        !     B_eff3(ii,:)=B_eff3(ii,:)+(matmul(damping(:,:,ii,jj),cross(spin(jj,:),B_eff2(jj,:)))/norm2(spin(jj,:)))
-        !     end do
-        ! end do
+        B_eff2=-Gamma*(B_eff1+spread(Bi,1,row)) !hamitonian+Bi
+        
         do ii=1,row
-            B_eff3(ii,:)=damping_onsite*cross(spin(ii,:),B_eff2(ii,:))
+            do jj=1,row
+                B_eff3(ii,:)=B_eff3(ii,:)+(matmul(damping(:,:,ii,jj),((s_new(jj,:)-s_old(jj,:))/dt))/norm2(s_new(jj,:)))
+            end do
         end do
+        ! do ii=1,row
+        !     B_eff3=damping_onsite*((s_new-s_old)/dt)
+        ! end do
         B_eff=B_eff2+B_eff3 
+        
     end function
 
     function derivate(spin_single,B_single) RESULT(deriv)
@@ -66,19 +75,24 @@ module spin_dynamics
         deriv= -1*Gamma*cross(spin_single,B_single)
         end function
 
-    function spin_update(spin,n) RESULT(spin_update1)
-        real(DP),DIMENSION(row,col) :: spin_update1
-        real(DP),dimension(row,col) :: spin
-        real(DP),dimension(1,row):: old_spin_length,new_spin_length
-        real(DP), DIMENSION(3) :: result
+    function spin_update(s_new,s_old) RESULT(spin_update1)
+        real(DP),DIMENSION(2*row,col) :: spin_update1
+        real(DP),dimension(row,col) :: s_new,s_old
+        ! real(DP),dimension(1,row):: old_spin_length,new_spin_length
+        real(DP), DIMENSION(row,col) :: result
         real(DP),dimension(row,col) :: B_eff_new
-        old_spin_length=reshape(norm2(spin,dim=2),[1,row])
-        B_eff_new=find_Beff(spin)
-        result=derivate(spin(n,:),B_eff_new(n,:))
-        spin_update1(n,1)=spin(n,1)+dt*result(1) 
-        spin_update1(n,2)=spin(n,2)+dt*result(2) 
-        spin_update1(n,3)=spin(n,3)+dt*result(3) 
-        new_spin_length=reshape(norm2(spin_update1,dim=2),[1,row])
+        INTEGER :: ii
+        ! old_spin_length=reshape(norm2(s_new,dim=2),[1,row])
+        DATA result  /6*0.d0/
+        B_eff_new=find_Beff(s_new,s_old)
+        s_old=s_new
+        do ii=1,row
+            result(ii,:)=cross(s_new(ii,:),B_eff_new(ii,:))
+            s_new(ii,:)=s_new(ii,:)+dt*result(ii,:)
+        end do
+        spin_update1(1:2,:)=s_new
+        spin_update1(3:4,:)=s_old
+        ! new_spin_length=reshape(norm2(s_new,dim=2),[1,row])
     end function
     FUNCTION cross(a, b) RESULT(c) 
         real(DP), DIMENSION(3) :: c
@@ -93,25 +107,28 @@ program main
     use global
     use spin_dynamics
     implicit none
-    INTEGER t,s,i
-    real(DP),dimension(2,dim) :: spinlattice
+    INTEGER t,i
+    real(DP),dimension(2,dim) :: spinlattice_old,spinlattice_new,delta
+    real(DP),dimension(4,dim) :: spinlattice
     real(DP), allocatable :: mx(:,:),my(:,:),mz(:,:),time(:,:),Mag_z(:,:),Mag_y(:,:),Mag_x(:,:)
     allocate(mx(row,step),my(row,step),mz(row,step),time(step,1),Mag_z(step,1),Mag_y(step,1),Mag_x(step,1))
-    spinlattice=reshape([real(DP):: 0,0,0.01,-0.01,1,1],[row,col])
-    
+    spinlattice_old=reshape([real(DP):: 0,0,0.01,-0.01,1,1],[row,col])
+    delta=reshape([real(DP):: 0,0,0.01,0.01,-0.1,0.1],[row,col])
+    spinlattice_new=spinlattice_old+delta
     do t=1,step
-        do s=1 ,row
-            spinlattice=spin_update(spinlattice,s)
-            mx(s,t)=spinlattice(s,1)
-            my(s,t)=spinlattice(s,2)
-            mz(s,t)=spinlattice(s,3)
+            spinlattice=spin_update(spinlattice_new,spinlattice_old)
+            spinlattice_new=spinlattice(1:2,:)
+            spinlattice_old=spinlattice(3:4,:)
+            mx(:,t)=spinlattice_new(:,1)
+            my(:,t)=spinlattice_new(:,2)
+            mz(:,t)=spinlattice_new(:,3)
             time(t,1)=t*dt/1000
         end do
-    end do
 
-   Mag_z=reshape(mz(1,:)+mz(2,:),[step,1])
-   Mag_x=reshape(mx(1,:)+mx(2,:),[step,1])
-   Mag_y=reshape(my(1,:)+my(2,:),[step,1])
+
+   Mag_z=reshape((mz(1,:)+mz(2,:))/2,[step,1])
+   Mag_x=reshape((mx(1,:)+mx(2,:))/2,[step,1])
+   Mag_y=reshape((my(1,:)+my(2,:))/2,[step,1])
     open(1, file = 'data1.dat')  
        do i=1,step  
           write(1,*) time(i,1), Mag_x(i,1),Mag_y(i,1),Mag_z(i,1) 
@@ -119,6 +136,5 @@ program main
 
     close(1) 
 end program main
-
 
 
