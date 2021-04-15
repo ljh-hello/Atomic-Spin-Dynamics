@@ -152,4 +152,4 @@ program main
     close(1) 
 end program main
 
-
+!!plot by the command: gnuplot plot.plt
