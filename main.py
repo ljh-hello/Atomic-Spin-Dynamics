@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar 19 19:39:00 2021
+
+@author: luzhiwei
+"""
+
 import find_neighbor
 import numpy as np
 import math
@@ -10,12 +20,12 @@ Ny=1
 Nz=1
 J1=0.001
 Bi=np.array([0,0,-10])*(5.7784/13.605*math.pow(10,-5))
-dt=1   #fs
-step=100000
+dt=0.1   #fs
+step=500000
 pos_file='POSCAR_Fe'
 r,latt_s=find_neighbor.expand_cell(pos_file,Nx,Ny,Nz)
 Magmom_length=1
-damping_onsite=0.1
+damping_onsite=1
 # damping_offsite=0.05
 NN,NL1=find_neighbor.find_neighbor_npbc(pos_file,Nx,Ny,Nz)
 # find_neighbor.plot_atom(r)
@@ -49,43 +59,31 @@ def gen_spec_spinlattice():
     # print(spinLattice)
     return spinLattice
 
-def Hamitonian(spin):
-    Hamitonian_Hei=np.zeros((len(r),3))
-    # Hamitonian_Zee=np.ones((len(r),3))
-    # Hamitonian_Zee=-Bi*Hamitonian_Zee
-    for ii in np.arange(len(r)):
-        for jj in np.arange(NN[ii].astype('int32')):
-            Hamitonian_Hei[ii,:]=Hamitonian_Hei[ii,:]+(-J1*spin[ii,:]*spin[NL1[ii,jj].astype('int32'),:])
-    Hamitonian=Hamitonian_Hei*2         
-    return Hamitonian
-
-
-# def find_Beff(spin):
-#     H=Hamitonian(spin)
-#     B_eff=np.divide(H,spin,np.zeros_like(H,dtype=np.float64),where=spin!=0)-Bi
-#     damping= find_diag_nonlocal_damping()
-#     # print(damping)
-#     B_eff_damp=np.zeros((len(r),3))
+# def Hamitonian(s):
+#     Hamitonian_Hei=np.zeros((len(r),3))
+#     # Hamitonian_Zee=np.ones((len(r),3))
+#     # Hamitonian_Zee=-Bi*Hamitonian_Zee
 #     for ii in np.arange(len(r)):
-#         for jj in np.arange(len(r)):
-#             B_eff_damp[ii,:]= B_eff_damp[ii,:]+((np.dot((damping[ii,jj,:,:]),derivate(spin[jj,:],B_eff[jj,:]).reshape(3,1))).reshape(1,3)/np.linalg.norm((spin[jj,:])))
+#         for jj in np.arange(NN[ii].astype('int32')):
+#             Hamitonian_Hei[ii,:]=Hamitonian_Hei[ii,:]+(-J1*s[ii,:]*s[NL1[ii,jj].astype('int32'),:])
+#     Hamitonian=Hamitonian_Hei        
+    # return Hamitonian
 
-#     B_eff_total=B_eff+B_eff_damp
-#     return B_eff_total
 
-def find_Beff(spin):
+def find_Beff(s_new,s_old):
     B_eff=np.zeros((len(r),3))
     for ii in np.arange(len(r)):
         for jj in np.arange(NN[ii].astype('int32')):
-            B_eff[ii,:]=B_eff[ii,:]+(J1*spin[NL1[ii,jj].astype('int32'),:])
-    B_eff=-(B_eff*2+Bi)
-    damping= find_diag_nonlocal_damping()
+            B_eff[ii,:]=B_eff[ii,:]+(J1*s_new[NL1[ii,jj].astype('int32'),:])
+    B_eff=-giromagneticRatio()*(B_eff*2+Bi)
+    damping= find_onsite_damping()
     # print(damping)
     B_eff_damp=np.zeros((len(r),3))
-    for ii in np.arange(len(r)):
-        for jj in np.arange(len(r)):
-            B_eff_damp[ii,:]= B_eff_damp[ii,:]+((np.dot((damping[ii,jj,:,:]),np.cross(spin[jj,:],B_eff[jj,:]).reshape(3,1))).reshape(1,3)/np.linalg.norm((spin[jj,:])))
+    # for ii in np.arange(len(r)):
+    #     for jj in np.arange(len(r)):
+    #         B_eff_damp[ii,:]= B_eff_damp[ii,:]+((np.dot((damping[ii,jj,:,:]),((s_new[jj,:]-s_old[jj,:])/dt).reshape(3,1))).reshape(1,3)/np.linalg.norm((s_new[jj,:])))
             # print((np.dot((damping[ii,jj,:,:]),np.cross(spin[jj,:],B_eff[jj,:]).reshape(3,1))))
+    B_eff_damp=damping_onsite*((s_new-s_old)/dt)
     B_eff_total=B_eff+B_eff_damp
     return B_eff_total
 
@@ -138,20 +136,16 @@ def derivate(S,H):
     return giromagneticRatio()*(np.cross(S.T,H.T))
 
 
-def update_spin(spin):
+def update_spin(s_new,s_old):
     # old_spin_length=np.linalg.norm(spin,axis=1)
-    B_eff=find_Beff(spin)
+    B_eff=find_Beff(s_new,s_old)
+    s_old=s_new
     result=np.zeros((len(r),3))
     for ii in range(len(r)):
-        result[ii,:] = (derivate(spin[ii,:], B_eff[ii,:]))
-    # result=np.cross((spin[n,:]).T, (B_eff[n,:]).T)
-        spin[ii,:] = spin[ii,:] + dt*result[ii,:]
-        
-    # new_spin_length=np.linalg.norm(spin,axis=1)
-    # spin_final=spin.T*(old_spin_length/new_spin_length)
-    # print(spin_final.T)
-    # aa=1
-    return spin
+        result[ii,:] = np.cross(s_new[ii,:],B_eff[ii,:])
+        s_new[ii,:] = s_new[ii,:] + dt*result[ii,:]
+
+    return s_new,s_old
 
 def plotMagnetization(mx, my, mz):
 	fig, ax = plt.subplots(figsize=(10,10))
@@ -165,36 +159,37 @@ def plotMagnetization(mx, my, mz):
 	plt.legend(loc=2)
 # 	plt.show()
 
-# def plotPositions():
-#     fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
-#     x,y,z= np.array((r[:,0],r[:,1], r[:,2]))
-#     u=spinLattice[:,0]
-#     v=spinLattice[:,1]
-#     w=spinLattice[:,2]
-#     plt.xlim(-2, 5) 
-#     plt.ylim(-2, 5)
-#     ax.set_zlim(0,3)
-#     ax.quiver(x, y,z, u, v, w, color='b')
-#     plt.show()
+def plotPositions(spin):
+    fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
+    x,y,z= np.array((r[:,0],r[:,1], r[:,2]))
+    u=spin[:,0]
+    v=spin[:,1]
+    w=spin[:,2]
+    plt.xlim(-2, 5) 
+    plt.ylim(-2, 5)
+    ax.set_zlim(0,3)
+    ax.quiver(x, y,z, u, v, w, color='b')
+    plt.show()
     
     
 mx = np.zeros((len(r),step))
 my = np.zeros((len(r),step))
 mz = np.zeros((len(r),step))
-spin=gen_spec_spinlattice()
-# plotPositions()
+old_spin=gen_spec_spinlattice()
+spin=old_spin+np.array([0,0.01,0.01])
+
 for t in range(step):
- 	 	spin = update_spin(spin)
- 	 	mx[:,t] = spin[:,0]
- 	 	my[:,t] = spin[:,1]
- 	 	mz[:,t]= spin[:,2]
+    spin,old_spin = update_spin(spin,old_spin)
+    mx[:,t] = spin[:,0]
+    my[:,t] = spin[:,1]
+    mz[:,t] = spin[:,2]
 
 Mx=mx.mean(axis=0)
 My=my.mean(axis=0)
 Mz=mz.mean(axis=0)
 plotMagnetization(Mx,My,Mz)
 # plt.savefig('dt_%f.png')
-# plotPositions()
+# plotPositions(spin)
 
 
 ######Animation
