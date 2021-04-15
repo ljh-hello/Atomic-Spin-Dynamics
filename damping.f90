@@ -54,15 +54,15 @@ module spin_dynamics
         end do
         !effective field from hamitonian and external field (-gamma*B_eff)
         B_eff2=-Gamma*(B_eff1+spread(Bi,1,row)) !hamitonian+Bi
-        !damping tensor
-        ! do ii=1,row
-        !     do jj=1,row
-        !         B_eff3(ii,:)=B_eff3(ii,:)+(matmul(damping(:,:,ii,jj),((s_new(jj,:)-s_old(jj,:))/dt))/norm2(s_new(jj,:)))
+        !!!damping tensor
+        do ii=1,row
+            do jj=1,row
+                B_eff3(ii,:)=B_eff3(ii,:)+(matmul(damping(:,:,ii,jj),((s_new(jj,:)-s_old(jj,:))/dt))/norm2(s_new(jj,:)))
              
-        !     end do
-        ! end do
-        !damping is a scalar 
-        B_eff3=damping_onsite*((s_new-s_old)/dt)
+            end do
+        end do
+        ! !damping is a scalar 
+        ! B_eff3=damping_onsite*((s_new-s_old)/dt)
         B_eff=B_eff2+B_eff3 
         
     end function
@@ -123,7 +123,7 @@ program main
     allocate(mx(row,step),my(row,step),mz(row,step),time(step,1),Mag_z(step,1),Mag_y(step,1),Mag_x(step,1))
     !initial guess of m^(-1) and m^(0)
     spinlattice_old=reshape([real(DP):: 0,0,0.01,-0.01,1,1],[row,col])
-    delta=reshape([real(DP):: 0,0,0.01,0.01,-0.1,0.1],[row,col])
+    delta=reshape([real(DP):: 0,0,0.01,0,01,0,01,0,01],[row,col])
     !m^(0)  = m(−1) + δm
     spinlattice_new=spinlattice_old+delta
     !main loop
