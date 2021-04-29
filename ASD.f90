@@ -18,7 +18,7 @@ Module global
     !size of supercell
     INTEGER,PARAMETER          ::     Nx=1,Ny=1,Nz=1
     !Read the unit cell file
-    CHARACTER(LEN =20) :: posfile='POSCAR2'
+    CHARACTER(LEN =20) :: posfile='Dimer'
     !Choose a type of damping
     integer(DP)                       ::  d_type=1
     !Set the length of onsite local damping
