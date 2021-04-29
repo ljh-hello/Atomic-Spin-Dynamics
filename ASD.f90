@@ -16,9 +16,9 @@ Module global
 
     ! Set parameters by hand
     !size of supercell
-    INTEGER,PARAMETER          ::     Nx=1,Ny=1,Nz=1
+    INTEGER,PARAMETER          ::     Nx=2,Ny=2,Nz=2
     !Read the unit cell file
-    CHARACTER(LEN =20) :: posfile='Dimer'
+    CHARACTER(LEN =20) :: posfile='POSCAR2'
     !Choose a type of damping
     integer(DP)                       ::  d_type=1
     !Set the length of onsite local damping
@@ -29,7 +29,7 @@ Module global
     integer,parameter :: Niter_midpoint = 100
     real(DP),parameter:: error_midpoint = 1E-8
     !
-    real(DP) :: mi=1.d0, Gamma=41.39d0,dt=0.1d0,J_size=0.001d0
+    real(DP) :: mi=1.d0, Gamma=41.39d0,dt=0.1d0,J_size=0.001d0,B_ext=-1.d0
     
     
 end Module
@@ -192,26 +192,30 @@ module find_neighbor_list
         energy = 1.d0/DBLE(N_atome_tot)*energy
       end function
     
-      subroutine set_calc(damping_type,N_atome_tot)
+      subroutine set_calc(damping_type,N_atome_tot,NN,NL1)
         IMPLICIT NONE
         INTEGER(DP)     ::     ii,jj,kk,damping_type
         INTEGER(DP),intent(in)          ::        N_atome_tot
+        INTEGER(DP), DIMENSION(N_atome_tot):: NN
+        INTEGER(DP), DIMENSION(N_atome_tot,N_atome_tot),INTENT(IN) :: NL1
         !< units in Ryd
         !< initialize damping and pair-index,spin-Hamiltonian and pair-index
-        
+        !Here only consider the nonlocal damping effect  induced from the nearest neighbor atom
         ALLOCATE(pair2index_damping(N_atome_tot,N_atome_tot))
         ALLOCATE(Bext(3,N_atome_tot))
+        pair2index_damping=0.d0
         do ii=1,N_atome_tot
-            Bext(:,ii) =4.24726e-05*(/0.d0,0.d0,-1.d0/)
+            Bext(:,ii) =4.24726e-05*(/0.d0,0.d0,B_ext/)
             do jj=1,N_atome_tot
                 if(ii==jj) then
                     pair2index_damping(ii,jj)=1
-                else 
-                    pair2index_damping(ii,jj)=2
-  
                 end if
-            end do
         end do
+        do kk=1,NN(ii)
+            pair2index_damping(ii,NL1(ii,kk))=2
+        end do
+        print *, pair2index_damping(ii,:)
+      end do
         J = 0.d0
         J(1,1,1) = J_size
         J(2,2,1) = J_size
@@ -453,7 +457,7 @@ program main
     ALLOCATE(s_new(3,N_atome_tot))
     ALLOCATE(s_update(3,N_atome_tot))
     CALL set_spin(s_new,N_atome_tot)
-    CALL set_calc(d_type,N_atome_tot)
+    CALL set_calc(d_type,N_atome_tot,NN,NL1)
 
     !< open output file
     open(10, file = 'moment_tot.dat')  
