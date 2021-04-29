@@ -210,11 +210,11 @@ module find_neighbor_list
                 if(ii==jj) then
                     pair2index_damping(ii,jj)=1
                 end if
-        end do
+            end do
         do kk=1,NN(ii)
             pair2index_damping(ii,NL1(ii,kk))=2
         end do
-        print *, pair2index_damping(ii,:)
+       ! print *, pair2index_damping(ii,:)
       end do
         J = 0.d0
         J(1,1,1) = J_size
